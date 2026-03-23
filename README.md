@@ -84,6 +84,7 @@ CMD ["/bin/tasks"]
 Запуск:
 ```bash
 cd deploy
+cp .env.example .env
 docker compose up -d --build
 ```
 ![docker compose up.png](docs/screenshots/docker%20compose%20up.png)
@@ -119,8 +120,76 @@ POSTGRES_PASSWORD=taskspass
 - auth доступен как auth:50051
 - tasks обращается к auth по сети docker
 - postgres доступен как postgres:5432
+- переменные окружение читаем из env
+```yml
+services:
+  postgres:
+    image: postgres:16
+    container_name: pr7-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  auth:
+    build:
+      context: ..
+      dockerfile: services/auth/Dockerfile
+    container_name: pr7-auth
+    command: ["/bin/auth"]
+    env_file:
+      - .env
+    environment:
+      AUTH_PORT: ${AUTH_PORT}
+      AUTH_GRPC_PORT: ${AUTH_GRPC_PORT}
+    ports:
+      - "8081:8081"
+      - "50051:50051"
 
+  tasks:
+    build:
+      context: ..
+      dockerfile: services/tasks/Dockerfile
+    container_name: pr7-tasks
+    command: ["/bin/tasks"]
+    env_file:
+      - .env
+    environment:
+      TASKS_PORT: ${TASKS_PORT}
+      AUTH_GRPC_ADDR: ${AUTH_GRPC_ADDR}
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth:
+        condition: service_started
+
+  nginx:
+    image: nginx:latest
+    container_name: pr7-nginx
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./cert.pem:/etc/nginx/tls/cert.pem:ro
+      - ./key.pem:/etc/nginx/tls/key.pem:ro
+    depends_on:
+      tasks:
+        condition: service_started
+```
 ---
 
 ## 6. Проверка
