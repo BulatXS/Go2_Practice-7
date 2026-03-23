@@ -115,12 +115,19 @@ POSTGRES_PASSWORD=taskspass
 
 ## 5. Взаимодействие сервисов
 
-Все сервисы находятся в одной сети docker-compose
+Для запуска стенда используется docker-compose.yml, который поднимает четыре контейнера:
+-	postgres — база данных для сервиса tasks
+-	auth — сервис авторизации
+-	tasks — основной сервис работы с задачами
+-	nginx — reverse proxy для приёма HTTPS-запросов
 
-- auth доступен как auth:50051
-- tasks обращается к auth по сети docker
-- postgres доступен как postgres:5432
-- переменные окружение читаем из env
+Все контейнеры запускаются в одной сети docker-compose, поэтому могут обращаться друг к другу по именам сервисов, а не по localhost.
+Например:
+-	tasks подключается к базе по адресу postgres:5432
+-	tasks обращается к сервису авторизации по адресу auth:50051
+
+Сервисы auth и tasks не берутся из готового образа, 
+а собираются локально по services/auth/Dockerfile и services/tasks/Dockerfile
 ```yml
 services:
   postgres:
